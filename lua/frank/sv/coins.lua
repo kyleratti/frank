@@ -1,18 +1,18 @@
-local meta = FindMetaTable( "Player" );
+local meta = FindMetaTable("Player")
 
-function meta:SetCoins( iAmount, bSave )
-	self:SetNWVar( "Coins", iAmount );
+function meta:setCoins(iAmount, bSave)
+	self:setNWVar("Coins", iAmount)
 
-	if( bSave ) then
-		self:SaveCoins( );
+	if(bSave) then
+		self:SaveCoins()
 	end
 end
 
-function meta:AddCoins( iAmount )
-	local iCoins = self:GetNWVar( "Coins", 0 );
-	self:SetNWVar( iCoins + iAmount );
+function meta:AddCoins(iAmount)
+	local iCoins = self:getNWVar("Coins", 0)
+	self:setNWVar(iCoins + iAmount)
 end
 
-function meta:SaveCoins( )
-	// TODO: save to mysql
+function meta:SaveCoins()
+	-- TODO: save to mysql
 end

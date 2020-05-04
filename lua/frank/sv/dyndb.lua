@@ -5,241 +5,243 @@
 	Python1320 - being awesome
 ]]
 
-local tblQueries = { }
+local tblQueries = {}
 
-dyndb = dyndb || { }
-dyndb.module = "mysqloo"; -- mysqloo is default, there hasn't been a tmysql compile since July
-dyndb.m_Database = nil;
+dyndb = dyndb or {}
+dyndb.module = "mysqloo" -- mysqloo is default, there hasn't been a tmysql compile since July
+dyndb.__database = nil
 
-local query = { }
-query.__index = query;
+local query = {}
+query.__index = query
 
-function query.Create( strQuery )
-	local tblQuery = { }
-	setmetatable( tblQuery, query );
-	tblQuery.m_Query = strQuery;
+function query.create(strQuery)
+	local tblQuery = {}
+	setmetatable(tblQuery, query)
+	tblQuery.query = strQuery
 
-	return tblQuery;
+	return tblQuery
 end
 
-local function HandleCallback( tblArgs, objCallback, tblData )
-	if( type( tblArgs ) == "table" ) then
-		if( objCallback && type( objCallback ) == "function" ) then
-			objCallback( tblData );
+local function handleCallback(tblArgs, objCallback, tblData)
+	if(type(tblArgs) == "table") then
+		if(objCallback and type(objCallback) == "function") then
+			objCallback(tblData)
 		end
-	elseif( type( tblArgs ) == "function" ) then
-		tblArgs( tblData );
+	elseif(type(tblArgs) == "function") then
+		tblArgs(tblData)
 	end
 end
 
-function query:Execute( tblArgs, objCallback )
-	local tblOriginal = { }
-	if( tblArgs && type( tblArgs ) == "table" && #tblArgs > 0 ) then
-		tblOriginal = table.Copy( tblArgs );
-		for k,v in pairs( tblArgs ) do
-			if( dyndb.module == "http" ) then
-				tblArgs[k] = dyndb.Escape( v );
+function query:execute(tblArgs, objCallback)
+	local tblOriginal = {}
+	if(tblArgs and type(tblArgs) == "table" and #tblArgs > 0) then
+		tblOriginal = table.Copy(tblArgs)
+		for k,v in pairs(tblArgs) do
+			if(dyndb.module == "http") then
+				tblArgs[k] = dyndb.escape(v)
 			else
-				if( type( v ) == "string" ) then
-					tblArgs[k] = dyndb.Escape( v );
+				if(type(v) == "string") then
+					tblArgs[k] = dyndb.escape(v)
 				end
 			end
 		end
 
-		if( dyndb.module != "http" ) then
-			self.m_Query = string.format( self.m_Query, unpack( tblArgs ) );
+		if(dyndb.module ~= "http") then
+			self.query = string.format(self.query, unpack(tblArgs))
 		end
 	end
 
-	table.insert( tblQueries, { ["time"] = os.time( ), ["query"] = self.m_Query } );
+	table.insert(tblQueries, {["time"] = os.time(), ["query"] = self.query})
 
-	if( dyndb.module == "mysqloo" ) then
-		local objQuery = dyndb.m_Database:query( self.m_Query );
+	if(dyndb.module == "mysqloo") then
+		local objQuery = dyndb.__database:query(self.query)
 
-		if( !objQuery ) then
-			error( "HELP! MISSING QUERY OBJECT OH PLEASE CALL SOMEONE\n" );
+		if(not objQuery) then
+			error("HELP! MISSING QUERY OBJECT OH PLEASE CALL SOMEONE\n")
 		end
 
-		function objQuery:onSuccess( tblData )
-			if( !tblArgs && !objCallback ) then return; end
+		function objQuery:onSuccess(tblData)
+			if(not tblArgs and !objCallback) then return end
 
-			HandleCallback( tblArgs, objCallback, tblData );
+			handleCallback(tblArgs, objCallback, tblData)
 		end
 
-		function objQuery:onError( strError, strQuery )
-			error( "[dyndb] "..strQuery.." errored ("..strError..")" );
+		function objQuery:onError(strError, strQuery)
+			error("[dyndb] "..strQuery.." errored ("..strError..")")
 		end
 
-		objQuery:start( );
-	elseif( dyndb.module == "tmysql" ) then
-		tmysql.query( self.m_Query, function( tblData, bOkay, strError )
-			if( !bOkay ) then
-				if( !strError || strError == "" ) then
-					strError = "syntax error??";
+		objQuery:start()
+	elseif(dyndb.module == "tmysql") then
+		tmysql.query(self.query, function(tblData, bOkay, strError)
+			if(not bOkay) then
+				if(not strError or strError == "") then
+					strError = "syntax error??"
 				end
-				error( "[dyndb] "..self.m_Query.." errored ("..strError..")" );
+				error("[dyndb] "..self.query.." errored ("..strError..")")
 			end
 
-			if( !tblArgs && !objCallback ) then return; end
+			if(not tblArgs and !objCallback) then return end
 
-			HandleCallback( tblArgs, objCallback, tblData );
-		end, QUERY_FLAG_ASSOC );
-	elseif( dyndb.module == "http" ) then
-		local strQuery = self.m_Query;
-		print( "[DynDB Query] "..strQuery );
-		local iParameters = table.Count( tblOriginal );
+			handleCallback(tblArgs, objCallback, tblData)
+		end, QUERY_FLAG_ASSOC)
+	elseif(dyndb.module == "http") then
+		local strQuery = self.query
+		print("[DynDB Query] "..strQuery)
+		local iParameters = table.Count(tblOriginal)
 
 		local tblPostData = {
-			["query"] = tostring( strQuery ),
-			["num_parameters"] = tostring( iParameters ),
-			["parameters"] = util.TableToJSON( tblOriginal ),
+			["query"] = tostring(strQuery),
+			["num_parameters"] = tostring(iParameters),
+			["parameters"] = util.TableToJSON(tblOriginal),
 		}
 
-		http.Post( "http://bananabunch.net/private/dyndb.php", tblPostData, function( strBody, iLen, tblHeaders, iCode )
-			if( !tblArgs && !objCallback ) then return; end
+		http.Post("http:--bananabunch.net/private/dyndb.php", tblPostData, function(strBody, iLen, tblHeaders, iCode)
+			if(not tblArgs and !objCallback) then return end
 
-			local tblData = util.JSONToTable( strBody );
+			local tblData = util.JSONToTable(strBody)
 
-			HandleCallback( tblArgs, objCallback, tblData );
-		end, function( iCode )
-			error( "HTTP query failure (err: "..iCode..")" );
-		end );
+			handleCallback(tblArgs, objCallback, tblData)
+		end, function(iCode)
+			error("HTTP query failure (err: "..iCode..")")
+		end)
 	end
 
-	return true;
+	return true
 end
 
-local strHost = "66.150.121.145";
-local strUser = "srcds";
-local strPass = "KUfrUSpAdUjeth4v";
-local strDB = "gm_frank";
+local tblDatabase = {
+	["hostname"] = "127.0.0.1",
+	["username"] = "srcds",
+	["password"] = "changeme",
+	["database"] = "frank"
+}
 
-function dyndb.Connect( )
-	if( dyndb.module == "mysqloo" ) then
-		if( !mysqloo ) then
-			require( "mysqloo" );
+function dyndb.connect()
+	if(dyndb.module == "mysqloo") then
+		if(not mysqloo) then
+			require("mysqloo")
 		end
 
-		dyndb.m_Database = mysqloo.connect( strHost, strUser, strPass, strDB );
-		dyndb.m_Database:connect( );
-	elseif( dyndb.module == "tmysql" ) then
-		if( !tmysql ) then
-			require( "tmysql" );
+		dyndb.__database = mysqloo.connect(tblDatabase.hostname, tblDatabase.username, tblDatabase.password, tblDatabase.database)
+		dyndb.__database:connect()
+	elseif(dyndb.module == "tmysql") then
+		if(not tmysql) then
+			require("tmysql")
 		end
 
-		tmysql.initialize( strHost, strUser, strPass, strDB, 3306 );
-	elseif( dyndb.module == "http" ) then
+		tmysql.initialize(tblDatabase.hostname, tblDatabase.username, tblDatabase.password, tblDatabase.database, 3306)
+	elseif(dyndb.module == "http") then
 		-- nothing to do, http!
 	else
-		error( "Invalid module! <mysqloo|tmysql|http>" );
+		error("Invalid module! <mysqloo|tmysql|http>")
 	end
 end
 
-function dyndb.GetQueries( )
-	return { ["num"] = table.Count( tblQueries ), ["queries"] = tblQueries }
+function dyndb.getAllQueries()
+	return {["num"] = table.Count(tblQueries), ["queries"] = tblQueries}
 end
 
-function dyndb.Escape( strString )
-	if( dyndb.module == "mysqloo" ) then
-		return "'"..dyndb.m_Database:escape( strString ).."'";
-	elseif( dyndb.module == "tmysql" ) then
-		return "'"..tmysql.escape( strString ).."'";
-	elseif( dyndb.module == "http" ) then
-		return "?"; -- let PHP handle the prepared statement
+function dyndb.escape(strString)
+	if(dyndb.module == "mysqloo") then
+		return "'"..dyndb.__database:escape(strString).."'"
+	elseif(dyndb.module == "tmysql") then
+		return "'"..tmysql.escape(strString).."'"
+	elseif(dyndb.module == "http") then
+		return "?" -- let PHP handle the prepared statement
 	end
 
-	return strString;
+	return strString
 end
 
-function dyndb.Prepare( strQuery )
-	return query.Create( strQuery );
+function dyndb.prepare(strQuery)
+	return query.create(strQuery)
 end
 
-function dyndb.Insert( strTable, tblStructure, funcCallback )
-	local strData = "";
-	local tblData = { }
-	local tblColumns = { }
+function dyndb.insert(strTable, tblStructure, funcCallback)
+	local strData = ""
+	local tblData = {}
+	local tblColumns = {}
 
-	for k,v in pairs( tblStructure ) do
-		local strColumn = v[1];
-		local strValue = v[2];
-		table.insert( tblColumns, strColumn );
-		table.insert( tblData, strValue );
+	for k,v in pairs(tblStructure) do
+		local strColumn = v[1]
+		local strValue = v[2]
+		table.insert(tblColumns, strColumn)
+		table.insert(tblData, strValue)
 
-		if( k != 1 ) then
-			strData = strData..", ";
+		if(k ~= 1) then
+			strData = strData..", "
 		end
 
-		local strType = "";
+		local strType = ""
 
-		if( type( strValue ) == "string" ) then
-			strType = "%s";
-		elseif( type( strValue ) == "number" ) then
-			strType = "%i";
+		if(type(strValue) == "string") then
+			strType = "%s"
+		elseif(type(strValue) == "number") then
+			strType = "%i"
 		end
 
-		strData = strData..strType;
+		strData = strData..strType
 	end
 
-	local objQuery = dyndb.Prepare( "INSERT INTO `"..strTable.."` ("..table.concat( tblColumns, ", " )..") VALUES("..strData..")" );
-	objQuery:Execute( tblData, funcCallback );
+	local objQuery = dyndb.prepare("INSERT INTO "..strTable.." ("..table.concat(tblColumns, ", ")..") VALUES("..strData..")")
+	objQuery:execute(tblData, funcCallback)
 end
 
-function dyndb.Update( strTable, tblStructure, tblWhere, iLimit )
-	local tblData = { }
-	local tblValues = { }
-	local tblWhereData = { }
+function dyndb.update(strTable, tblStructure, tblWhere, iLimit)
+	local tblData = {}
+	local tblValues = {}
+	local tblWhereData = {}
 
-	for k,v in pairs( tblStructure ) do
-		local strColumn = v[1];
-		local strValue = v[2];
-		local strType = "";
+	for k,v in pairs(tblStructure) do
+		local strColumn = v[1]
+		local strValue = v[2]
+		local strType = ""
 
-		if( type( strValue ) == "string" ) then
-			strType = "s";
-		elseif( type( strValue ) == "number" ) then
-			strType = "i";
+		if(type(strValue) == "string") then
+			strType = "s"
+		elseif(type(strValue) == "number") then
+			strType = "i"
 		end
 
-		table.insert( tblData, "`"..strColumn.."` = %"..strType );
-		table.insert( tblValues, strValue );
+		table.insert(tblData, ""..strColumn.." = %"..strType)
+		table.insert(tblValues, strValue)
 	end
 
-	for k,v in pairs( tblWhere ) do
-		local strColumn = v[1];
-		local strValue = v[2];
-		local strType = "";
+	for k,v in pairs(tblWhere) do
+		local strColumn = v[1]
+		local strValue = v[2]
+		local strType = ""
 
-		if( type( strValue ) == "string" ) then
-			strType = "%s";
-		elseif( type( strValue ) == "number" ) then
-			strType = "%i";
+		if(type(strValue) == "string") then
+			strType = "%s"
+		elseif(type(strValue) == "number") then
+			strType = "%i"
 		end
 
-		table.insert( tblWhereData, "`"..strColumn.."` = "..strType );
-		table.insert( tblValues, strValue );
+		table.insert(tblWhereData, ""..strColumn.." = "..strType)
+		table.insert(tblValues, strValue)
 	end
 
-	local objQuery = dyndb.Prepare( "UPDATE `"..strTable.."` SET "..table.concat( tblData, ", " ).." WHERE "..table.concat( tblWhereData, " AND " )..( iLimit && " LIMIT "..iLimit || "" ) );
-	objQuery:Execute( tblValues );
+	local objQuery = dyndb.prepare("UPDATE "..strTable.." SET "..table.concat(tblData, ", ").." WHERE "..table.concat(tblWhereData, " AND ")..(iLimit and " LIMIT "..iLimit or ""))
+	objQuery:execute(tblValues)
 end
 
 -- Allows querying the DB without dealing with a callback
 -- Basically a compact version of a prepared statement
-function dyndb.Query( strQuery, ... )
-	local tblArgs = { ... }
-	if( #tblArgs > 0 ) then
-		strQuery = string.format( strQuery, unpack( tblArgs ) );
+function dyndb.query(strQuery, ...)
+	local tblArgs = {...}
+	if(#tblArgs > 0) then
+		strQuery = string.format(strQuery, unpack(tblArgs))
 	end
 
-	local objQuery = dyndb.Prepare( strQuery );
-	objQuery:Execute( );
+	local objQuery = dyndb.prepare(strQuery)
+	objQuery:execute()
 end
 
-dyndb.Connect( );
+dyndb.connect()
 
-hook.Add( "ShutDown", "dyndb_cleanup", function( )
-	if( dyndb && dyndb.m_Database ) then
-		dyndb.m_Database = nil;
+hook.Add("ShutDown", "dyndb.ShutDown", function()
+	if(dyndb and dyndb.__database) then
+		dyndb.__database = nil
 	end
-end );
+end)

@@ -5,18 +5,18 @@ gameevent.Listen("player_connect")
 gameevent.Listen("player_disconnect")
   
 function gatekeeper.Drop(userid, reason)
-    if( timer.Exists( "player_join_"..userid ) ) then
-        timer.Destroy( "player_join_"..userid );
+    if(timer.Exists("player_join_"..userid)) then
+        timer.Destroy("player_join_"..userid)
     end
 
-    for k,v in pairs( player.GetAll( ) ) do
-        if( v:UserID( ) == userid ) then
-            v.IgnoreLeave = true;
-            break;
+    for k,v in pairs(player.GetAll()) do
+        if(v:UserID() == userid) then
+            v.IgnoreLeave = true
+            break
         end
     end
 
-    game.ConsoleCommand(string.format("kickid %d %s\n",userid,reason:gsub(';|\n','')))
+    game.ConsoleCommand(string.format("kickid %d %s\n",userid,reason:gsub('|\n','')))
 end
   
 function gatekeeper.GetNumClients()
@@ -44,7 +44,7 @@ hook.Add("player_connect", "GateKeeper", function(data)
         end
     end
 
-    hook.Call( "PlayerConnected", GAMEMODE, data.name, data.userid, data.networkid, data.address );
+    hook.Call("PlayerConnected", GAMEMODE, data.name, data.userid, data.networkid, data.address)
     
     table.insert(spawning, data.userid)
 end)

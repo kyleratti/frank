@@ -1,86 +1,87 @@
-frank = frank || { }
+frank = frank or {}
+frank.bans = frank.bans or {}
 
-/*dyndb.Insert( "log_connect", {
-		{ "nick",	strNick 				},
-		{ "steam",	strSteamID				},
-		{ "ip", 	strIP					},
-		{ "time", 	tostring( os.time( ) )	},
-	} );*/
+--[[dyndb.insert("log_connect", {
+		{"nick",	strNick 				},
+		{"steam",	strSteamID				},
+		{"ip", 	strIP					},
+		{"time", 	tostring(os.time())	},
+	})]]--
 
-util.AddNetworkString( "player_joinleave" );
+util.AddNetworkString("frank.player.joinLeave")
 
-hook.Add( "PlayerConnected", "frank_Bans_PlayerPasswordAuth", function( strNick, iUserID, strSteamID, strIP )
-	local objQuery = dyndb.Prepare( "SELECT `time`, `reason` FROM `player_bans` WHERE `steam` = %s LIMIT 1" );
-	objQuery:Execute( { strSteamID }, function( tblData )
-		if( !tblData || !tblData[1] )  then return; end
-		tblData = tblData[1];
+local APPEAL_MESSAGE = "\nAppeal at www.google.com"
 
-		local iTime = tonumber( tblData["time"] );
-		local strReason = tblData["reason"];
+-- TODO: fix this - CheckPassword expects a return value, but ban is checked in MySQL query
 
-		if( iTime == 0 ) then
-			gatekeeper.Drop( iUserID, "Banned Forever ("..strReason..")" );
-		elseif( os.time( ) > iTime ) then
-			local objStatement = dyndb.Prepare( "DELETE FROM `player_bans` WHERE `steam` = %s LIMIT 1" );
-			objStatement:Execute( { strSteamID } );
+hook.Add("CheckPassword", "franks.bans.CheckPassword", function(strSteam64, strIP, strServerPass, strClientPass, strNick)
+	local strSteamID = util.SteamIDFrom64(strSteam64)
+
+	local objQuery = dyndb.prepare("SELECT time, reason FROM player_bans WHERE steam = %s LIMIT 1")
+	objQuery:execute({strSteam}, function(tblData)
+		if(not tblData or not tblData[1]) then return end
+
+		local iTime = tonumber(tblData[1]["time"])
+		local strReason = tblData[1]["reason"]
+
+		if(iTime == 0) then
+			return false, "Banned Forever ("..strReason..")"..APPEAL_MESSAGE
+		elseif(os.time() >= iTime) then
+			frank.bans.remove(strSteamID)
 		else
-			gatekeeper.Drop( iUserID, "Banned for "..time.Short( iTime - os.time( ) ).." ("..strReason..")" );
+			return false, "Banned for "..time.short(iTime - os.time()).." ("..strReason..")"
 		end
-	end );
 
-	timer.Create( "player_join_"..iUserID, 0.2, 1, function( )
-		net.Start( "player_joinleave" );
-			net.WriteString( strNick );
-			net.WriteString( strSteamID );
-			net.WriteBit( true );
-		net.Broadcast( );
-	end );
-end );
+		net.Start("frank.player.joinLeave")
+			net.WriteString(strNick)
+			net.WriteString(strSteamID)
+			net.WriteBit(true)
+		net.Broadcast()
+	end)
+end)
 
-hook.Add( "PlayerDisconnected", "frank_Bans_PlayerDisconnected", function( objPl )
-	if( !objPl.IgnoreLeave ) then
-		net.Start( "player_joinleave" );
-			net.WriteString( objPl:Nick( ) );
-			net.WriteString( objPl:SteamID( ) );
-			net.WriteBit( false );
-		net.Broadcast( );
-	end
-end );
+hook.Add("PlayerDisconnected", "frank.bans.PlayerDisconnected", function(objPl)
+	net.Start("frank.player.joinLeave")
+		net.WriteString(objPl:Nick())
+		net.WriteString(objPl:SteamID())
+		net.WriteBit(false)
+	net.Broadcast()
+end)
 
-function frank.AddBan( strNick, strSteamID, iTime, strReason, strAdminNick, strAdminSteamID )
-	if( iTime != 0 ) then
-		iTime = os.time( ) + ( iTime * 60 ); -- input is in minutes, convert to seconds
+function frank.bans.add(strSteamID, iTime, strReason, strAdminSteamID)
+	if(iTime ~= 0) then
+		iTime = os.time() + (iTime * 60)
 	end
 
-	local objQuery = dyndb.Prepare( "REPLACE INTO `player_bans` (nick, steam, time, reason, anick, asteam) VALUES(%s, %s, %s, %s, %s, %s)" );
-	objQuery:Execute( { strNick, strSteamID, tostring( iTime ), strReason, strAdminNick, strAdminSteamID } );
+	local objQuery = dyndb.prepare("REPLACE INTO player_bans (steam, time, reason, asteam) VALUES(%s, %s, %s, %s)")
+	objQuery:execute({strSteamID, iTime, strReason, strAdminSteamID})
 
-	for k,v in pairs( player.GetAll( ) ) do
-		if( v:SteamID( ) == strSteamID ) then
-			local strTime = ( iTime == 0 && "infinity" || time.Short( iTime - os.time( ) ) );
+	for k,v in pairs(player.GetAll()) do
+		if(v:SteamID() == strSteamID) then
+			local strTime = (iTime == 0 and "infinity") or time.short(iTime - os.time())
 
-			gatekeeper.Drop( v:UserID( ), "Banned for "..strTime.." ("..strReason..")" );
-			break;
+			v:Kick("Banned for "..((iTime == 0 and "infinity" or time.short(iTime - os.time()))).." ("..strReason..")"..APPEAL_MESSAGE)
+			break
 		end
 	end
 end
 
-function frank.RemoveBan( strSteamID )
-	local objQuery = dyndb.Prepare( "DELETE FROM `player_bans` WHERE `steam` = %s LIMIT 1" );
-	objQuery:Execute( { strSteamID } );
+function frank.bans.remove(strSteamID)
+	local objQuery = dyndb.prepare("DELETE FROM player_bans, WHERE steam = %s LIMIT 1")
+	objQuery:execute({strSteamID})
 end
 
--- clear player_bans
+-- clear expired bans
 
-local function ClearBans( )
-	dyndb.Query( "DELETE FROM `player_bans` WHERE `time` != 0 AND `time` < "..os.time( ) );
+local function clearBans()
+	dyndb.query("DELETE FROM player_bans WHERE time ~= 0 AND time < "..os.time())
 end
 
-timer.Create( "Clear_Bans", 60 * 30, 0, function( )
-	ClearBans( );
-end );
+timer.Create("Clear_Bans", 60 * 30, 0, function()
+	clearBans()
+end)
 
-hook.Add( "PlayerInitialSpawn", "frank_Bans_ClearExpired", function( )
-	ClearBans( );
-	hook.Remove( "PlayerInitialSpawn", "frank_Bans_ClearExpired" );
-end );
+hook.Add("PlayerInitialSpawn", "frank_Bans_ClearExpired", function()
+	clearBans()
+	hook.Remove("PlayerInitialSpawn", "frank_Bans_ClearExpired")
+end)

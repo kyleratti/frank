@@ -1,1 +1,1 @@
-language.Add( "worldspawn", "Gravity" );
+language.Add("worldspawn", "Gravity")
